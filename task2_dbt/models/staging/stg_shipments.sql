@@ -9,6 +9,7 @@ deduplicated AS (
     SELECT
         *,
         -- Keep the latest business state based on when the status changed, 
+        -- using pipeline landing time as a tiebreaker[cite: 61].
         ROW_NUMBER() OVER (
             PARTITION BY shipment_id
             ORDER BY status_updated_at DESC, _ingested_at DESC
