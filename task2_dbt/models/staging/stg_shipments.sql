@@ -8,8 +8,6 @@ deduplicated AS (
 
     SELECT
         *,
-        -- Keep the latest business state based on when the status changed, 
-        -- using pipeline landing time as a tiebreaker[cite: 61].
         ROW_NUMBER() OVER (
             PARTITION BY shipment_id
             ORDER BY status_updated_at DESC, _ingested_at DESC
@@ -37,11 +35,11 @@ final AS (
         governorate,
         is_fulfillment,
 
-        -- Financials [cite: 60]
+        -- Financials
         CAST(cod_amount AS DECIMAL(18,2)) AS cod_amount,
         cod_collected,
 
-        -- Derived boolean column: TRUE if cod_amount is greater than zero [cite: 62]
+        -- Derived boolean column: TRUE if cod_amount is greater than zero
         CASE
             WHEN cod_amount IS NOT NULL AND cod_amount > 0 THEN TRUE
             ELSE FALSE
