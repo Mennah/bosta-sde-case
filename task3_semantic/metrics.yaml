@@ -1,0 +1,128 @@
+version: 2
+
+semantic_models:
+  - name: stg_shipments
+    description: >
+      Our primary shipment-level metrics layer. Sourced directly from stg_shipments,
+      this section hosts our foundational transaction records and maps out the dimensions 
+      needed for our core delivery and financial performance tracking.
+    model: ref('stg_shipments')
+    defaults:
+      agg_time_dimension: created_at
+
+    entities:
+      - name: business_id
+        type: foreign
+        expr: business_id
+      - name: shipment_id
+        type: primary
+        expr: shipment_id
+
+    dimensions:
+      - name: created_at
+        type: time
+        type_params:
+          time_granularity: day
+      - name: status
+        type: categorical
+      - name: is_fulfillment
+        type: categorical
+      - name: governorate
+        type: categorical
+      - name: hub_id
+        type: categorical
+
+    measures:
+      - name: shipment_count
+        agg: sum
+        expr: 1
+      - name: delivered_count
+        agg: sum
+        expr: "CASE WHEN status = 'DELIVERED' THEN 1 ELSE 0 END"
+      - name: delivered_first_attempt_count
+        agg: sum
+        expr: "CASE WHEN status = 'DELIVERED' AND attempt_count = 1 THEN 1 ELSE 0 END"
+      - name: concluded_count
+        agg: sum
+        expr: "CASE WHEN status IN ('DELIVERED', 'RETURNED', 'CANCELLED') THEN 1 ELSE 0 END"
+      - name: cod_collected_count
+        agg: sum
+        expr: "CASE WHEN is_cod = TRUE AND cod_collected = TRUE THEN 1 ELSE 0 END"
+      - name: cod_eligible_count
+        agg: sum
+        expr: "CASE WHEN is_cod = TRUE THEN 1 ELSE 0 END"
+      - name: delivered_attempt_count_sum
+        agg: sum
+        expr: "CASE WHEN status = 'DELIVERED' THEN attempt_count ELSE 0 END"
+
+  - name: merchant_daily
+    description: >
+      A pre-aggregated merchant-day metrics layer. Sourced from merchant_daily to 
+      support complex window functions, like rolling averages, without slowing down 
+      downstream dashboards.
+    model: ref('merchant_daily')
+    defaults:
+      agg_time_dimension: shipment_date
+
+    entities:
+      - name: business_id
+        type: primary
+        expr: business_id
+
+    dimensions:
+      - name: shipment_date
+        type: time
+        type_params:
+          time_granularity: day
+
+    measures:
+      - name: rolling_delivered_count
+        agg: sum
+        expr: delivered_count
+      - name: rolling_concluded_count
+        agg: sum
+        expr: concluded_count
+
+metrics:
+  - name: delivery_rate
+    description: "The percentage of packages successfully delivered out of all completed orders."
+    type: ratio
+    type_params:
+      numerator: delivered_count
+      denominator: concluded_count
+
+  - name: cod_collection_rate
+    description: "The percentage of cash successfully collected from couriers out of all eligible COD deliveries."
+    type: ratio
+    type_params:
+      numerator: cod_collected_count
+      denominator: cod_eligible_count
+
+  - name: first_attempt_delivery_rate
+    description: "The percentage of delivered packages that couriers dropped off successfully on their very first try."
+    type: ratio
+    type_params:
+      numerator: delivered_first_attempt_count
+      denominator: delivered_count
+
+  - name: avg_attempts_to_deliver
+    description: "The average number of package delivery attempts required to achieve a successful delivery."
+    type: ratio
+    type_params:
+      numerator: delivered_attempt_count_sum
+      denominator: delivered_count
+
+  - name: fulfillment_delivery_rate
+    description: "The delivery success rate specifically for packages handled inside our own fulfillment centers."
+    type: ratio
+    type_params:
+      numerator: delivered_count
+      denominator: concluded_count
+    filter: "{{ Dimension('stg_shipments__is_fulfillment') }} = true"
+
+  - name: rolling_7d_delivery_rate
+    description: "A smoothed, volume-weighted 7-day rolling delivery success rate calculated individually per merchant."
+    type: ratio
+    type_params:
+      numerator: rolling_delivered_count
+      denominator: rolling_concluded_count
