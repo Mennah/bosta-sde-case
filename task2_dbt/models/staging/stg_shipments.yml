@@ -1,0 +1,40 @@
+
+sources:
+  - name: raw
+    schema: raw
+    tables:
+      - name: shipments
+
+models:
+  - name: stg_shipments
+    description: 
+      Cleaned and deduplicated shipments from the raw CDC layer.
+      One row per shipment.
+    columns:
+      - name: shipment_id
+        description: Unique identifier for each shipment.
+        tests:
+          - not_null
+          - unique
+          
+      - name: business_id
+        description: Identifier of the merchant who created the shipment.
+        tests:
+          - not_null
+
+      - name: status
+        description: Current status of the shipment.
+        tests:
+          - not_null
+
+          - accepted_values:
+              values: ['CREATED', 'IN_TRANSIT', 'DELIVERED', 'RETURNED', 'CANCELLED']
+
+      - name: is_cod
+         description: True if this shipment requires cash-on-delivery payment.
+        tests:
+          - not_null
+
+tests:
+  - name: assert_cod_collected_only_on_cod_shipments
+    description: Fails if any shipment has cod_collected = true but is_cod = false.
