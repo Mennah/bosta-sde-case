@@ -1,0 +1,52 @@
+version: 2
+
+models:
+  - name: merchant_daily
+     description: Merchant-day grain summary of shipment volumes and performance metrics
+    columns:
+      - name: business_id
+         description: Identifier of the merchant.
+        tests:
+          -  not_null
+
+      - name: shipment_date
+         description: The calendar date the shipment was created.
+        tests:
+          -  not_null
+
+      - name: total_shipments
+         description: Total number of shipments created by this merchant on this date.
+
+      - name: delivered_count
+         description: Number of shipments with status DELIVERED.
+
+      - name: delivery_rate
+         description: Delivered shipments divided by concluded shipments.
+
+        tests:
+          -  dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1
+              row_condition: "delivery_rate is not null"
+
+      - name: cod_collection_rate
+         description: COD shipments where payment was collected divided by eligible shipments.
+
+        tests:
+          -  dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1
+              row_condition: "cod_collection_rate is not null"
+
+      - name: rolling_7d_delivery_rate
+         description: 7-day rolling volume-weighted delivery rate.
+         
+        tests:
+          -  dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1
+              row_condition: "rolling_7d_delivery_rate is not null"
+
+tests:
+  - name: assert_concluded_not_exceeding_total
+    description: Fails if delivered + returned + cancelled ever exceeds total_shipments.
