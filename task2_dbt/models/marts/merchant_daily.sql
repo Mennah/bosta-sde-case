@@ -10,20 +10,24 @@ daily_aggregates AS (
         business_id,
         DATE(created_at) AS shipment_date,
 
-       
+        -- Volume tracking [cite: 66, 67]
         COUNT(shipment_id) AS total_shipments,
         COUNT(CASE WHEN status = 'DELIVERED' THEN 1 END) AS delivered_count,
         COUNT(CASE WHEN status = 'DELIVERED' AND attempt_count = 1 THEN 1 END) AS delivered_first_attempt_count,
         COUNT(CASE WHEN status = 'RETURNED' THEN 1 END) AS returned_count,
         COUNT(CASE WHEN status = 'CANCELLED' THEN 1 END) AS cancelled_count,
 
-        -- Delivery rate denominator (excludes ongoing states) 
+        -- Delivery rate denominator (excludes ongoing states) [cite: 68, 91]
         COUNT(CASE WHEN status IN ('DELIVERED','RETURNED','CANCELLED') THEN 1 END) AS concluded_count,
 
-        -- COD metrics 
+        -- COD metrics [cite: 69]
         SUM(CASE WHEN cod_collected = TRUE THEN cod_amount ELSE 0 END) AS cod_collected_amount,
         COUNT(CASE WHEN is_cod = TRUE THEN 1 END) AS cod_eligible_count,
         COUNT(CASE WHEN is_cod = TRUE AND cod_collected = TRUE THEN 1 END) AS cod_collected_count,
+
+        -- Effort tracking [cite: 70]
+        AVG(attempt_count) AS avg_attempt_count,
+        SUM(CASE WHEN status = 'DELIVERED' THEN attempt_count ELSE 0 END) AS delivered_attempt_count_sum
 
     FROM shipments
     GROUP BY
@@ -36,13 +40,13 @@ with_rates AS (
 
     SELECT
         *,
-        -- Delivery Rate = Delivered / (Delivered + Returned + Cancelled) 
+        -- Delivery Rate = Delivered / (Delivered + Returned + Cancelled) [cite: 68]
         CASE
             WHEN concluded_count = 0 THEN NULL
             ELSE ROUND(delivered_count * 1.0 / concluded_count, 4)
         END AS delivery_rate,
 
-        -- COD Collection Rate = Collected Count / Eligible Count 
+        -- COD Collection Rate = Collected Count / Eligible Count [cite: 69]
         CASE
             WHEN cod_eligible_count = 0 THEN NULL
             ELSE ROUND(cod_collected_count * 1.0 / cod_eligible_count, 4)
@@ -56,7 +60,7 @@ with_rolling AS (
 
     SELECT
         *,
-        -- 7-day rolling delivery rate (volume-weighted)
+        -- 7-day rolling delivery rate (volume-weighted) [cite: 71]
         ROUND(
             SUM(delivered_count) OVER (
                 PARTITION BY business_id
