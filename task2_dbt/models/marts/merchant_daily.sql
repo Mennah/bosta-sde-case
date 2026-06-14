@@ -25,10 +25,6 @@ daily_aggregates AS (
         COUNT(CASE WHEN is_cod = TRUE THEN 1 END) AS cod_eligible_count,
         COUNT(CASE WHEN is_cod = TRUE AND cod_collected = TRUE THEN 1 END) AS cod_collected_count,
 
-        -- Effort tracking 
-        AVG(attempt_count) AS avg_attempt_count,
-        SUM(CASE WHEN status = 'DELIVERED' THEN attempt_count ELSE 0 END) AS delivered_attempt_count_sum
-
     FROM shipments
     GROUP BY
         business_id,
