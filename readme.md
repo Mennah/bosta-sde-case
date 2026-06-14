@@ -1,176 +1,152 @@
-**Bosta Senior Data Engineer Case Study Introduction** 
+Bosta Senior Data Engineer Case Study
+Introduction
 
-This repository contains my solution for the Bosta Senior Data Engineer case study. The submission covers three areas: 
+This repository contains my solution for the Bosta Senior Data Engineer case study.
 
-•    
-CDC architecture and orchestration 
+The submission covers three areas:
 
-•    
-dbt modelling and data quality 
+CDC architecture and orchestration
+dbt modelling and data quality
+Semantic layer design and governance
+My Approach
 
-•    
-Semantic layer design and governance 
+The main principle behind this solution is to keep business logic centralized and reusable.
 
-**My Approach** 
+CDC captures operational changes reliably.
+dbt transforms and validates the data.
+The semantic layer owns business definitions.
+Downstream consumers reuse those definitions rather than recreating them.
 
-•    
-CDC captures operational changes reliably. 
+This approach helps ensure consistency across dashboards, reports, and future AI-driven applications while keeping the platform maintainable as data volumes grow.
 
-•    
-dbt transforms and validates the data. 
+Task 1 – CDC Architecture
 
-•    
-The semantic layer owns business definitions. 
+For the MongoDB → Redshift pipeline, I proposed an event-driven CDC architecture based on MongoDB Change Streams, Debezium, Kafka, and Redshift.
 
-•    
-Downstream consumers reuse those definitions rather than recreating them. 
+The primary goals were:
 
-I also tried to favor solutions that would still work when data volumes grow significantly beyond today's scale. 
+Minimize load on production systems
+Reduce warehouse latency
+Support schema evolution
+Allow safe replay and recovery
 
-**Task 1 – CDC Architecture** 
+The detailed reasoning and trade-offs are documented in:
 
-For the MongoDB → Redshift pipeline, I proposed an event-driven CDC architecture based on MongoDB Change Streams, Debezium, Kafka, and Redshift. 
+task1_pipeline/ADR.md
 
-The primary goals were: 
+The orchestration design, failure handling strategy, and backfill approach are documented in:
 
-•    
-Minimize load on production systems •    
-Reduce warehouse latency 
+task1_pipeline/orchestration_sketch.md
+Task 2 – dbt Modelling & Data Quality
+Staging Layer
 
-•    
-Support schema evolution 
+The staging model standardizes the raw shipment data by:
 
-•    
-Allow safe replay and recovery 
+Casting source fields to consistent types
+Applying a consistent naming convention
+Deduplicating shipments using the latest ingestion timestamp
+Deriving useful business flags such as is_cod
+Merchant Daily Mart
 
-The detailed reasoning and trade-offs are documented in: 
+The mart aggregates shipment activity at a merchant-day grain and provides operational KPIs such as:
 
-task1\_pipeline/ADR.md 
+Total shipments created
+Delivered, returned, and cancelled shipments
+Delivery rate
+COD collected amount
+COD collection rate
+Average attempt count
+7-day rolling delivery rate
+Data Quality
 
-The orchestration design, failure handling strategy, and backfill approach are documented in: task1\_pipeline/Orchestration Sketch.md 
+I included both generic and custom tests and documented three realistic failure scenarios that could silently impact reporting.
 
-1  
-**Task 2 – dbt Modelling & Data Quality Staging Layer** 
+The analysis can be found in:
 
-The staging model standardizes the raw shipment data by: 
+task2_dbt/dq_analysis.md
+Task 3 – Semantic Layer
 
-•    
-Casting source fields to consistent types 
+The semantic layer introduces a single definition for commonly used business metrics:
 
-•    
-Applying a naming convention 
+Delivery Rate
+COD Collection Rate
+First Attempt Delivery Rate
+Average Attempts to Deliver
+Fulfillment Delivery Rate
 
-•    
-Deduplicating shipments using the latest ingestion timestamp •    
-Deriving useful business flags such as is\_cod 
+The objective is to ensure that BI dashboards, analysts, and future AI applications all calculate metrics consistently.
 
-**Merchant Daily Mart** 
+Metric definitions are located in:
 
-The mart aggregates shipment activity at a merchant-day grain and provides operational KPIs such as: 
+task3_semantic/metrics.yaml
 
-•    
-Shipment counts 
+Additional documentation:
 
-•  •    
-Delivery performance 
+task3_semantic/dimensions.md
+task3_semantic/governance.md
+Key Decisions
+Event-Driven CDC
 
-COD collection performance •    
-Attempt metrics 
+I chose an event-driven CDC architecture over scheduled extraction jobs to reduce warehouse latency, avoid MongoDB load spikes, and support future scalability requirements.
 
-•    
-Rolling delivery rates 
+Append-Only Raw Layer
 
-**Data Quality** 
+Raw CDC events are stored before transformation to provide replayability, easier debugging, and safer recovery from failures.
 
-I included both generic and custom tests and documented three realistic failure scenarios that could silently impact reporting. 
+Semantic Layer as the Source of Truth
 
-The analysis can be found in: 
+Business metrics are defined once in the semantic layer rather than being recreated in dashboards or ad-hoc queries. This helps eliminate conflicting definitions across teams.
 
-task2\_dbt/dq\_analysis.md 
+Trade-offs
 
-**Task 3 – Semantic Layer** 
+A few conscious trade-offs were made:
 
-The semantic layer introduces a single definition for commonly used business metrics such as: 
+Kafka Adds Operational Complexity
 
-•  •    
-Delivery Rate 
+Using Kafka and Debezium introduces more infrastructure than a simple batch ingestion process.
 
-COD Collection Rate 
+I accepted that trade-off because it provides replayability, scalability, and near real-time ingestion, which are important for a platform of Bosta's size.
 
-•    
-First Attempt Delivery Rate •    
-Average Attempts to Deliver 
+Eventual Consistency
 
-•    
-Fulfillment Delivery Rate 
+The proposed architecture is not strictly real-time.
 
-The objective is to ensure that BI dashboards, analysts, and future AI applications all calculate metrics consistently. 
+There will always be a small delay between operational activity and analytical availability, but that delay is acceptable for reporting workloads and simplifies system reliability.
 
-Metric definitions are located in: 
+Additional Storage Usage
 
-task3\_semantic/metrics.yaml 
+Retaining CDC history increases storage costs, but provides significant benefits for auditing, recovery, and historical replay.
 
-2  
-Additional documentation: 
+What I Would Do With More Time
 
-task3\_semantic/dimensions.md 
+If this were part of a full sprint rather than a case study, I would likely add:
 
-task3\_semantic/governance.md 
+Data contracts for upstream schema management
+Automated freshness SLAs and observability dashboards
+More extensive dbt-expectations tests
+End-to-end integration testing
+CI/CD validation for dbt and semantic layer changes
+Automated lineage and ownership documentation
+Running the dbt Models
 
-**Trade-offs** 
+Run all models:
 
-A few conscious trade-offs were made: 
+dbt run
 
-**Kafka Adds Operational Complexity** 
+Run tests:
 
-Using Kafka and Debezium introduces more infrastructure than a simple batch ingestion process. 
+dbt test
 
-I accepted that trade-off because it provides replayability, scalability, and near real-time ingestion, which are important for a platform of Bosta's size. 
+Build models and execute tests together:
 
-**Eventual Consistency** 
+dbt build
 
-The proposed architecture is not strictly real-time. 
+Generate documentation:
 
-There will always be a small delay between operational activity and analytical availability, but that delay is acceptable for reporting workloads and simplifies system reliability. 
+dbt docs generate
+dbt docs serve
+Closing Notes
 
-**Additional Storage Usage** 
+The goal of this submission was not to produce the most complex solution possible, but rather to demonstrate how I would approach building and operating a reliable data platform in a production environment.
 
-Retaining CDC history increases storage costs. 
-
-**What I Would Do With More Time** 
-
-If this were part of a full sprint rather than a case study, I would likely add: 
-
-•    
-More extensive dbt-expectations tests •    
-End-to-end integration testing •    
-CI/CD validation for dbt and semantic layer changes 
-
-**Running the dbt Models** 
-
-Run all models: 
-
-dbt run 
-
-Run tests: 
-
-3  
-dbt test 
-
-Build models and execute tests together: 
-
-dbt build 
-
-Generate documentation: 
-
-dbt docs generate 
-
-dbt docs serve 
-
-**Closing Notes** 
-
-The goal of this submission was not to produce the most complex solution possible, but rather to demonstrate how I would think about building and operating a reliable data platform in a production environment. 
-
-Where appropriate, I prioritized clarity, maintainability, and operational safety over unnecessary complexity. 
-
-4
+Where appropriate, I prioritized clarity, maintainability, observability, and operational safety over unnecessary complexity.
